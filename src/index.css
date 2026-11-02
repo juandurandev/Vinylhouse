@@ -18,3 +18,14 @@ body,
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Transiciones nativas de Swup (.transition-swup) */
+html.is-changing .transition-swup {
+  transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.is-animating .transition-swup {
+  opacity: 0;
+  transform: translateY(16px);
+}
