@@ -18,6 +18,7 @@ import CartView from './CartView'
 import CatalogFooter from './CatalogFooter'
 import CategoryMultiselect from './CategoryMultiselect'
 import CheckoutView from './CheckoutView'
+import { loadOptimizedTexture } from '../utils/textureLoader'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -31,6 +32,7 @@ export default function VinylCatalog3D() {
   const applyCategoryFilterRef = useRef<
     ((categories: VinylCategory[]) => void) | null
   >(null)
+  const focusFirstVinylRef = useRef<(() => void) | null>(null)
   const swupRef = useRef<Swup | null>(null)
   const scrollTriggerRef = useRef<ScrollTrigger | null>(null)
   const lenisRef = useRef<Lenis | null>(null)
@@ -308,13 +310,14 @@ export default function VinylCatalog3D() {
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
+      stencil: false,
+      depth: true,
     })
     renderer.setSize(container.clientWidth, container.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.05
-    renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.shadowMap.enabled = false
     container.appendChild(renderer.domElement)
 
     // =========================================================================
@@ -325,7 +328,6 @@ export default function VinylCatalog3D() {
 
     const mainLight = new THREE.DirectionalLight(0xfff8eb, 1.6)
     mainLight.position.set(6, 9, 8)
-    mainLight.castShadow = true
     scene.add(mainLight)
 
     const fillLight = new THREE.DirectionalLight(0xf3ede2, 0.9)
@@ -333,12 +335,11 @@ export default function VinylCatalog3D() {
     scene.add(fillLight)
 
     // =========================================================================
-    // 4. CONSTRUCCIÓN DE LAS CUBIERTAS 3D + POSICIÓN INICIAL ARRIBA A LA DERECHA
+    // 4. CONSTRUCCIÓN DE LAS CUBIERTAS 3D + MATERIALES COMPARTIDOS OPTIMIZADOS
     // =========================================================================
     const carouselGroup = new THREE.Group()
     scene.add(carouselGroup)
 
-    const textureLoader = new THREE.TextureLoader()
     const maxAnisotropy = renderer.capabilities.getMaxAnisotropy()
 
     const sleeveGeometry = new THREE.BoxGeometry(
@@ -346,6 +347,19 @@ export default function VinylCatalog3D() {
       SCENE_CONFIG.coverSize,
       SCENE_CONFIG.coverDepth
     )
+
+    // Materiales compartidos opacos para evitar recompilación de shaders
+    const sharedSpineMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe2dcd0,
+      roughness: 0.75,
+      metalness: 0.04,
+    })
+
+    const sharedBackCoverMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd8d1c5,
+      roughness: 0.65,
+      metalness: 0.05,
+    })
 
     interface IntroOffset {
       offsetX: number
@@ -359,7 +373,7 @@ export default function VinylCatalog3D() {
     interface CoverRecord {
       group: THREE.Group
       mesh: THREE.Mesh
-      materials: THREE.MeshStandardMaterial[]
+      frontMaterial: THREE.MeshStandardMaterial
       basePosition: THREE.Vector3
       baseRotation: THREE.Euler
       dampedPos: THREE.Vector3
@@ -373,6 +387,7 @@ export default function VinylCatalog3D() {
 
     const coverRecords: CoverRecord[] = []
     let activeInteractiveMeshes: THREE.Object3D[] = []
+    let isDisposed = false
 
     VINYL_CATALOG.forEach((item, index) => {
       const itemGroup = new THREE.Group()
@@ -389,9 +404,9 @@ export default function VinylCatalog3D() {
       )
 
       const introState: IntroOffset = {
-        offsetX: 8.5 + index * 1.15,
-        offsetY: 4.8 + index * 0.55,
-        offsetZ: -3.8 - index * 0.65,
+        offsetX: 9.2 + index * 1.15,
+        offsetY: 5.4 + index * 0.55,
+        offsetZ: -4.2 - index * 0.65,
         rotX: 0.32,
         rotY: -0.38,
         rotZ: -0.24,
@@ -419,63 +434,34 @@ export default function VinylCatalog3D() {
         dampedRot.y + introState.rotY,
         dampedRot.z + introState.rotZ
       )
-      itemGroup.scale.setScalar(0.84)
-
-      const coverTexture = textureLoader.load(encodeURI(item.image))
-      coverTexture.colorSpace = THREE.SRGBColorSpace
-      coverTexture.anisotropy = maxAnisotropy
-
-      const spineMaterial = new THREE.MeshStandardMaterial({
-        color: 0xe2dcd0,
-        roughness: 0.75,
-        metalness: 0.04,
-        transparent: true,
-        opacity: 0,
-        depthWrite: true,
-      })
-
-      const backCoverMaterial = new THREE.MeshStandardMaterial({
-        color: 0xd8d1c5,
-        roughness: 0.65,
-        metalness: 0.05,
-        transparent: true,
-        opacity: 0,
-        depthWrite: true,
-      })
+      itemGroup.scale.setScalar(0.001)
 
       const frontMaterial = new THREE.MeshStandardMaterial({
-        map: coverTexture,
+        color: 0xffffff,
         roughness: 0.32,
         metalness: 0.04,
-        transparent: true,
-        opacity: 0,
-        depthWrite: true,
       })
 
       const materials = [
-        spineMaterial,
-        spineMaterial,
-        spineMaterial,
-        spineMaterial,
+        sharedSpineMaterial,
+        sharedSpineMaterial,
+        sharedSpineMaterial,
+        sharedSpineMaterial,
         frontMaterial,
-        backCoverMaterial,
+        sharedBackCoverMaterial,
       ]
 
       const coverMesh = new THREE.Mesh(sleeveGeometry, materials)
-      coverMesh.castShadow = true
-      coverMesh.receiveShadow = true
       coverMesh.userData = { visibleSlot: index }
 
       itemGroup.add(coverMesh)
       carouselGroup.add(itemGroup)
       activeInteractiveMeshes.push(coverMesh)
 
-      const uniqueMaterials = [spineMaterial, backCoverMaterial, frontMaterial]
-
       coverRecords.push({
         group: itemGroup,
         mesh: coverMesh,
-        materials: uniqueMaterials,
+        frontMaterial,
         basePosition: basePos,
         baseRotation: baseRot,
         dampedPos,
@@ -488,52 +474,72 @@ export default function VinylCatalog3D() {
       })
     })
 
+    // Pre-compilar shaders de la escena antes de iniciar el bucle de animación
+    renderer.compile(scene, camera)
+
     // =========================================================================
-    // 5. ANIMACIÓN DE ENTRADA DESDE LA PARTE SUPERIOR DERECHA CON GSAP
+    // 5. CARGA ASÍNCRONA DE TEXTURAS EN GPU + ANIMACIÓN DE ENTRADA FLUIDA
     // =========================================================================
-    coverRecords.forEach((record, idx) => {
-      const fadeProxy = { opacity: 0 }
-      const staggerDelay = 0.06 + idx * 0.055
+    let hasTriggeredIntro = false
 
-      gsap.to(fadeProxy, {
-        opacity: 1,
-        duration: 0.95,
-        delay: staggerDelay,
-        ease: 'power2.out',
-        onUpdate: () => {
-          record.materials.forEach((mat) => {
-            mat.opacity = fadeProxy.opacity
-          })
-        },
-        onComplete: () => {
-          record.materials.forEach((mat) => {
-            mat.opacity = 1
-            mat.transparent = false
-            mat.depthWrite = true
-            mat.needsUpdate = true
-          })
-        },
+    const startIntroAnimation = () => {
+      if (hasTriggeredIntro || isDisposed) return
+      hasTriggeredIntro = true
+
+      coverRecords.forEach((record, idx) => {
+        const staggerDelay = 0.02 + idx * 0.042
+
+        gsap.to(record.introState, {
+          offsetX: 0,
+          offsetY: 0,
+          offsetZ: 0,
+          rotX: 0,
+          rotY: 0,
+          rotZ: 0,
+          duration: 1.25,
+          delay: staggerDelay,
+          ease: 'expo.out',
+        })
+
+        gsap.fromTo(
+          record.group.scale,
+          { x: 0.82, y: 0.82, z: 0.82 },
+          {
+            x: 1,
+            y: 1,
+            z: 1,
+            duration: 1.15,
+            delay: staggerDelay,
+            ease: 'expo.out',
+          }
+        )
       })
+    }
 
-      gsap.to(record.introState, {
-        offsetX: 0,
-        offsetY: 0,
-        offsetZ: 0,
-        rotX: 0,
-        rotY: 0,
-        rotZ: 0,
-        duration: 1.45,
-        delay: staggerDelay,
-        ease: 'expo.out',
-      })
+    // Priorizar los primeros 5 vinilos visibles en pantalla y cargar el resto en paralelo
+    const priorityRecords = coverRecords.slice(0, 5)
+    const remainingRecords = coverRecords.slice(5)
 
-      gsap.to(record.group.scale, {
-        x: 1,
-        y: 1,
-        z: 1,
-        duration: 1.35,
-        delay: staggerDelay,
-        ease: 'expo.out',
+    const loadRecordTexture = async (record: CoverRecord) => {
+      const texture = await loadOptimizedTexture(
+        record.item.image,
+        renderer,
+        maxAnisotropy
+      )
+      if (isDisposed) return
+      record.frontMaterial.map = texture
+      record.frontMaterial.needsUpdate = true
+    }
+
+    // Fallback de seguridad por si la red tarda más de 90ms
+    const introFallbackTimer = window.setTimeout(startIntroAnimation, 90)
+
+    Promise.all(priorityRecords.map(loadRecordTexture)).then(() => {
+      window.clearTimeout(introFallbackTimer)
+      startIntroAnimation()
+      // Cargar el resto de portadas en segundo plano sin bloquear el hilo principal
+      remainingRecords.forEach((record) => {
+        void loadRecordTexture(record)
       })
     })
 
@@ -595,6 +601,10 @@ export default function VinylCatalog3D() {
           : 0
       setClampedProgress(targetProgress)
       syncScrollToProgress(targetProgress, false)
+    }
+
+    focusFirstVinylRef.current = () => {
+      focusAndSelectVinyl(0)
     }
 
     applyCategoryFilterRef.current = (categories: VinylCategory[]) => {
@@ -755,6 +765,8 @@ export default function VinylCatalog3D() {
     // 8. BUCLE DE ANIMACIÓN CON INTERPOLACIÓN CONTINUA + MOVIMIENTO CONSTANTE
     // =========================================================================
     let animationFrameId: number
+    let lastActiveIdx = -1
+    const tempLocalPoint = new THREE.Vector3()
     const clock = new THREE.Clock()
 
     const animate = () => {
@@ -777,7 +789,10 @@ export default function VinylCatalog3D() {
 
       const currentFloatIndex = trackState.currentProgress * maxSlot
       const currentIdx = Math.round(currentFloatIndex)
-      setActiveIndex(currentIdx)
+      if (currentIdx !== lastActiveIdx) {
+        lastActiveIdx = currentIdx
+        setActiveIndex(currentIdx)
+      }
 
       carouselGroup.position.x = -trackState.currentProgress * totalTravelX
       carouselGroup.position.z = -trackState.currentProgress * totalTravelZ
@@ -807,9 +822,10 @@ export default function VinylCatalog3D() {
             container.style.cursor = 'pointer'
           }
 
-          const localPoint = hit.object.worldToLocal(hit.point.clone())
-          hoverNormX = localPoint.x / (SCENE_CONFIG.coverSize * 0.5)
-          hoverNormY = localPoint.y / (SCENE_CONFIG.coverSize * 0.5)
+          tempLocalPoint.copy(hit.point)
+          hit.object.worldToLocal(tempLocalPoint)
+          hoverNormX = tempLocalPoint.x / (SCENE_CONFIG.coverSize * 0.5)
+          hoverNormY = tempLocalPoint.y / (SCENE_CONFIG.coverSize * 0.5)
         } else if (hoveredSlotIndex !== null) {
           hoveredSlotIndex = null
           setHoveredVinyl(null)
@@ -969,6 +985,8 @@ export default function VinylCatalog3D() {
     window.addEventListener('resize', onResize)
 
     return () => {
+      isDisposed = true
+      window.clearTimeout(introFallbackTimer)
       cancelAnimationFrame(animationFrameId)
       window.removeEventListener('resize', onResize)
       container.removeEventListener('pointerdown', onPointerDown)
@@ -981,6 +999,10 @@ export default function VinylCatalog3D() {
       gsap.ticker.remove(updateLenis)
       lenis.destroy()
       lenisRef.current = null
+      sleeveGeometry.dispose()
+      sharedSpineMaterial.dispose()
+      sharedBackCoverMaterial.dispose()
+      coverRecords.forEach((record) => record.frontMaterial.dispose())
       renderer.dispose()
       if (renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement)
@@ -1072,6 +1094,13 @@ export default function VinylCatalog3D() {
   )
   const totalInBolivares = totalCartPrice * eurBcvRate
 
+  const handleTitleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (currentView === 'catalog') {
+      e.preventDefault()
+      focusFirstVinylRef.current?.()
+    }
+  }
+
   const titleText = 'vinilhouse'
   const currentSlotPosition =
     filteredCatalog.findIndex((item) => item.id === currentVinyl.id) + 1 || 1
@@ -1086,11 +1115,14 @@ export default function VinylCatalog3D() {
         id="swup"
         className="transition-swup relative flex flex-col w-full h-full overflow-hidden"
       >
-        {/* Encabezado responsive con nombre "vinilhouse" en fuente Chillax */}
+        {/* Encabezado responsive con nombre "vinilhouse" en fuente Chillax clickeable hacia el inicio */}
         <header className="relative z-30 shrink-0 flex items-center justify-between gap-2 sm:gap-4 px-4 pt-4 pb-1 sm:px-8 sm:pt-5 sm:pb-2 md:px-14 bg-[#F5F2EB]">
-          <div
+          <a
+            href="/"
+            onClick={handleTitleClick}
             onMouseEnter={handleTitleMouseEnter}
-            className="cursor-default select-none min-w-0"
+            aria-label="Ir al inicio de vinilhouse"
+            className="cursor-pointer select-none min-w-0 no-underline focus:outline-none"
           >
             <h1
               className="font-chillax flex flex-wrap text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight text-[#1C1B18] overflow-hidden py-0.5"
@@ -1108,7 +1140,7 @@ export default function VinylCatalog3D() {
                 </span>
               ))}
             </h1>
-          </div>
+          </a>
 
           <div className="shrink-0 flex items-center gap-2 sm:gap-3">
             {/* Multiselect modular con la paleta de Buttons.tsx */}
