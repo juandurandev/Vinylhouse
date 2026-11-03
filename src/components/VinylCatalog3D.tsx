@@ -1301,45 +1301,52 @@ export default function VinylCatalog3D() {
                   </svg>
                 </button>
 
-                {isCategoryMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-52 rounded-2xl border border-black/10 bg-white p-2.5 shadow-lg z-50">
-                    <div className="flex items-center justify-between px-2 pb-2 mb-1.5 border-b border-black/8">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-[#78736A]">
-                        Filtrar Géneros
+                <div
+                  aria-hidden={!isCategoryMenuOpen}
+                  className={`absolute right-0 mt-2 w-48 rounded-2xl border border-black/10 bg-white p-2 shadow-lg z-50 transition-all duration-250 ease-out origin-top-right ${
+                    isCategoryMenuOpen
+                      ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+                      : 'opacity-0 -translate-y-1.5 scale-95 pointer-events-none'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategories([])}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                        selectedCategories.length === 0
+                          ? 'bg-[#1C1B18] text-white'
+                          : 'text-[#1C1B18] hover:bg-neutral-100'
+                      }`}
+                    >
+                      <span>Ver todos</span>
+                      <span className="text-[11px]">
+                        {selectedCategories.length === 0 ? '✓' : ''}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCategories([])}
-                        className="text-[11px] font-medium text-[#1C1B18] underline hover:opacity-70 cursor-pointer"
-                      >
-                        Ver todos
-                      </button>
-                    </div>
+                    </button>
 
-                    <div className="space-y-1">
-                      {ALL_CATEGORIES.map((category) => {
-                        const isChecked = selectedCategories.includes(category)
-                        return (
-                          <button
-                            key={category}
-                            type="button"
-                            onClick={() => toggleCategory(category)}
-                            className={`w-full flex items-center justify-between rounded-xl px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-                              isChecked
-                                ? 'bg-[#1C1B18] text-white'
-                                : 'text-[#1C1B18] hover:bg-neutral-100'
-                            }`}
-                          >
-                            <span>{category}</span>
-                            <span className="text-[11px]">
-                              {isChecked ? '✓' : ''}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {ALL_CATEGORIES.map((category) => {
+                      const isChecked = selectedCategories.includes(category)
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => toggleCategory(category)}
+                          className={`w-full flex items-center justify-between rounded-xl px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                            isChecked
+                              ? 'bg-[#1C1B18] text-white'
+                              : 'text-[#1C1B18] hover:bg-neutral-100'
+                          }`}
+                        >
+                          <span>{category}</span>
+                          <span className="text-[11px]">
+                            {isChecked ? '✓' : ''}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -1372,7 +1379,7 @@ export default function VinylCatalog3D() {
                   <line x1="3" y1="6" x2="21" y2="6" />
                   <path d="M16 10a4 4 0 0 1-8 0" />
                 </svg>
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1C1B18] px-1.5 text-[11px] font-semibold text-white">
+                <span className="text-xs font-mono font-semibold text-[#1C1B18]">
                   {totalCartItems}
                 </span>
               </a>
@@ -1449,7 +1456,7 @@ export default function VinylCatalog3D() {
               )}
 
               <div className="flex items-center gap-3 ml-auto md:ml-0">
-                <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[11px] font-mono font-medium tracking-widest text-[#1C1B18] shadow-2xs">
+                <span className="text-xs font-mono font-medium tracking-widest text-[#1C1B18]">
                   {String(currentSlotPosition).padStart(2, '0')} /{' '}
                   {String(filteredCatalog.length).padStart(2, '0')}
                 </span>
