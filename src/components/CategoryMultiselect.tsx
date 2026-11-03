@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ALL_CATEGORIES, type VinylCategory } from '../data/vinylCatalog'
-import { Button3D } from './Buttons'
+import { Button3D, playKeypressSound } from './Buttons'
 
 export interface CategoryMultiselectProps {
   selectedCategories: VinylCategory[]
@@ -76,6 +76,7 @@ export default function CategoryMultiselect({
         <div className="space-y-1.5">
           <button
             type="button"
+            onPointerDown={playKeypressSound}
             onClick={onResetCategories}
             className={`w-full flex items-center justify-between rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 cursor-pointer ${
               isAllSelected
@@ -95,6 +96,7 @@ export default function CategoryMultiselect({
               <button
                 key={category}
                 type="button"
+                onPointerDown={playKeypressSound}
                 onClick={() => onToggleCategory(category)}
                 className={`w-full flex items-center justify-between rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150 cursor-pointer ${
                   isChecked

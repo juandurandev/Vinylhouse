@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import type { PaymentMethod } from '../data/vinylCatalog'
-import { Button3D, LinkButton3D } from './Buttons'
+import { Button3D, LinkButton3D, playKeypressSound } from './Buttons'
 
 export interface CheckoutViewProps {
   customerName: string
@@ -112,6 +112,7 @@ export default function CheckoutView({
                     <button
                       key={option.id}
                       type="button"
+                      onPointerDown={playKeypressSound}
                       onClick={() => onPaymentMethodChange(option.id)}
                       className={`rounded-2xl border px-4 py-3 text-xs sm:text-sm font-medium transition cursor-pointer ${
                         isSelected
