@@ -14,6 +14,7 @@ export interface CatalogFooterProps {
 
 /**
  * Pie del catálogo minimalista y centrado debajo de la portada 3D activa.
+ * Optimizado para Mobile Safari (safe-area-inset-bottom y layout estable).
  */
 export default function CatalogFooter({
   currentVinyl,
@@ -41,14 +42,14 @@ export default function CatalogFooter({
     gsap.fromTo(
       elements,
       {
-        yPercent: 55,
+        yPercent: 45,
         opacity: 0,
       },
       {
         yPercent: 0,
         opacity: 1,
-        duration: 0.42,
-        stagger: 0.045,
+        duration: 0.38,
+        stagger: 0.04,
         ease: 'power3.out',
         overwrite: 'auto',
       }
@@ -56,10 +57,10 @@ export default function CatalogFooter({
   }, [currentVinyl.id])
 
   return (
-    <footer className="relative z-20 shrink-0 w-full px-4 pt-1 pb-4 sm:px-8 sm:pb-6 md:px-14 bg-[#F5F2EB]">
-      <div className="mx-auto max-w-2xl flex flex-col items-center text-center">
+    <footer className="relative z-20 shrink-0 w-full px-4 pt-1 pb-[max(0.85rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-6 md:px-14 bg-[#F5F2EB]">
+      <div className="mx-auto max-w-md sm:max-w-2xl flex flex-col items-center text-center">
         {/* Nombre del álbum, artista y precio centrados debajo del vinilo */}
-        <div className="w-full overflow-hidden px-2">
+        <div className="w-full overflow-hidden px-1">
           <h2
             ref={titleRef}
             className="text-lg sm:text-2xl md:text-3xl font-bold tracking-tight text-[#1C1B18] truncate will-change-transform"
@@ -80,7 +81,7 @@ export default function CatalogFooter({
 
           <div
             ref={priceRef}
-            className="mt-1.5 inline-flex items-baseline justify-center gap-1.5 will-change-transform"
+            className="mt-1 inline-flex items-baseline justify-center gap-1.5 will-change-transform"
           >
             <span className="font-chillax text-2xl sm:text-3xl font-bold tracking-tight text-[#9d3656]">
               ${currentVinyl.price.toFixed(2)}
@@ -91,21 +92,21 @@ export default function CatalogFooter({
           </div>
         </div>
 
-        {/* Botones de acción centrados y limpios */}
-        <div className="mt-3 flex items-center justify-center gap-3 w-full sm:w-auto">
-          <Button3D onClick={onBuyNow} className="flex-1 sm:flex-initial">
+        {/* Botones de acción centrados, estables en Safari iOS y adaptables */}
+        <div className="mt-2.5 sm:mt-3 grid grid-cols-2 sm:flex items-center justify-center gap-2.5 sm:gap-3.5 w-full max-w-[340px] sm:max-w-none sm:w-auto">
+          <Button3D onClick={onBuyNow} className="w-full sm:w-auto">
             Comprar ahora
           </Button3D>
-          <Button3D onClick={onAddToCart} className="flex-1 sm:flex-initial">
+          <Button3D onClick={onAddToCart} className="w-full sm:w-auto">
             Agregar al carrito
           </Button3D>
         </div>
       </div>
 
-      {/* Contador minimalista en la esquina sin saturar la barra */}
-      <div className="mt-2 sm:mt-0 sm:absolute sm:right-8 md:right-14 sm:bottom-6 flex items-center justify-center sm:justify-end gap-3">
+      {/* Contador minimalista e indicador de feedback */}
+      <div className="mt-1.5 sm:mt-0 sm:absolute sm:right-8 md:right-14 sm:bottom-6 flex items-center justify-center sm:justify-end gap-3 min-h-[20px]">
         {feedbackMessage && (
-          <span className="rounded-lg text-[11px] sm:text-xs font-medium text-[#800033] bg-[#cd3f64]/10 border border-[#9d3656]/30 px-3 py-1">
+          <span className="rounded-lg text-[11px] sm:text-xs font-medium text-[#800033] bg-[#cd3f64]/10 border border-[#9d3656]/30 px-2.5 py-0.5">
             ✓ {feedbackMessage}
           </span>
         )}
@@ -118,4 +119,3 @@ export default function CatalogFooter({
     </footer>
   )
 }
-

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import Lenis from 'lenis'
 import Swup from 'swup'
 import {
   SCENE_CONFIG,
@@ -20,8 +18,6 @@ import CategoryMultiselect from './CategoryMultiselect'
 import CheckoutView from './CheckoutView'
 import { loadOptimizedTexture } from '../utils/textureLoader'
 
-gsap.registerPlugin(ScrollTrigger)
-
 export default function VinylCatalog3D() {
   const sectionRef = useRef<HTMLElement | null>(null)
   const canvasContainerRef = useRef<HTMLDivElement | null>(null)
@@ -34,8 +30,7 @@ export default function VinylCatalog3D() {
   >(null)
   const focusFirstVinylRef = useRef<(() => void) | null>(null)
   const swupRef = useRef<Swup | null>(null)
-  const scrollTriggerRef = useRef<ScrollTrigger | null>(null)
-  const lenisRef = useRef<Lenis | null>(null)
+  const currentViewRef = useRef<PageView>('catalog')
 
   const [hoveredVinyl, setHoveredVinyl] = useState<VinylItem | null>(null)
   const [activeIndex, setActiveIndex] = useState<number>(0)
@@ -63,6 +58,11 @@ export default function VinylCatalog3D() {
     useState<PaymentMethod>('pago_movil')
   const [eurBcvRate, setEurBcvRate] = useState<number>(54.85)
   const [isLoadingRate, setIsLoadingRate] = useState<boolean>(false)
+
+  // Mantener ref sincronizada con la vista activa
+  useEffect(() => {
+    currentViewRef.current = currentView
+  }, [currentView])
 
   // Lista filtrada según el multiselect (si está vacío se ven todos por defecto)
   const filteredCatalog =
@@ -152,26 +152,6 @@ export default function VinylCatalog3D() {
     }
   }, [])
 
-  // Desactivar el pin spacer de ScrollTrigger cuando se está en /carrito o /checkout
-  useEffect(() => {
-    const st = scrollTriggerRef.current
-    const lenis = lenisRef.current
-
-    if (currentView !== 'catalog') {
-      st?.disable(false)
-      lenis?.stop()
-      window.scrollTo(0, 0)
-      document.documentElement.style.overflow = 'hidden'
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.documentElement.style.overflow = ''
-      document.body.style.overflow = ''
-      st?.enable(false)
-      lenis?.start()
-      ScrollTrigger.refresh()
-    }
-  }, [currentView])
-
   // Sincronizar cambios del multiselect de categorías con la escena 3D
   useEffect(() => {
     applyCategoryFilterRef.current?.(selectedCategories)
@@ -190,7 +170,7 @@ export default function VinylCatalog3D() {
           { opacity: 0 },
           {
             opacity: 1,
-            duration: 1.15,
+            duration: 0.85,
             ease: 'power2.out',
           }
         )
@@ -208,10 +188,10 @@ export default function VinylCatalog3D() {
             yPercent: 0,
             rotateZ: 0,
             opacity: 1,
-            duration: 0.9,
-            stagger: 0.032,
+            duration: 0.85,
+            stagger: 0.03,
             ease: 'power4.out',
-            delay: 0.18,
+            delay: 0.1,
             onComplete: () => {
               isTitleIntroDoneRef.current = true
             },
@@ -264,22 +244,30 @@ export default function VinylCatalog3D() {
     if (!section || !container) return
 
     // =========================================================================
-    // 1. LENIS + GSAP SCROLLTRIGGER (Sincronización de Scroll Suave)
+    // 1. DIMENSIONES SEGURAS DEL CONTENEDOR (Previene tamaño 0 en Safari iOS)
     // =========================================================================
-    const lenis = new Lenis({
-      duration: 1.15,
-      easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    })
-    lenisRef.current = lenis
-
-    lenis.on('scroll', ScrollTrigger.update)
-
-    const updateLenis = (time: number) => {
-      lenis.raf(time * 1000)
+    const getSafeContainerSize = () => {
+      const rect = container.getBoundingClientRect()
+      const width =
+        rect.width > 20
+          ? Math.round(rect.width)
+          : Math.max(window.innerWidth, 320)
+      const height =
+        rect.height > 20
+          ? Math.round(rect.height)
+          : Math.max(window.innerHeight - 230, 260)
+      return { width, height }
     }
-    gsap.ticker.add(updateLenis)
-    gsap.ticker.lagSmoothing(0)
+
+    const getResponsiveCameraZ = (width: number, height: number) => {
+      const aspect = width / Math.max(height, 1)
+      if (aspect < 1) {
+        return THREE.MathUtils.clamp(8.5 / Math.pow(aspect, 0.5), 8.6, 13.0)
+      }
+      return 8.5
+    }
+
+    const initialSize = getSafeContainerSize()
 
     // =========================================================================
     // 2. ESCENA THREE.JS, CÁMARA RESPONSIVA Y RENDERER (Fondo Crema #F5F2EB)
@@ -287,24 +275,16 @@ export default function VinylCatalog3D() {
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(SCENE_CONFIG.bgColor)
 
-    const getResponsiveCameraZ = (width: number, height: number) => {
-      const aspect = width / Math.max(height, 1)
-      if (aspect < 1) {
-        return THREE.MathUtils.clamp(8.5 / Math.pow(aspect, 0.52), 8.7, 13.4)
-      }
-      return 8.5
-    }
-
     const camera = new THREE.PerspectiveCamera(
       38,
-      container.clientWidth / Math.max(container.clientHeight, 1),
+      initialSize.width / initialSize.height,
       0.1,
       100
     )
     camera.position.set(
       0,
       0.0,
-      getResponsiveCameraZ(container.clientWidth, container.clientHeight)
+      getResponsiveCameraZ(initialSize.width, initialSize.height)
     )
 
     const renderer = new THREE.WebGLRenderer({
@@ -313,11 +293,19 @@ export default function VinylCatalog3D() {
       stencil: false,
       depth: true,
     })
-    renderer.setSize(container.clientWidth, container.clientHeight)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    renderer.setSize(initialSize.width, initialSize.height, false)
+    renderer.domElement.style.display = 'block'
+    renderer.domElement.style.width = '100%'
+    renderer.domElement.style.height = '100%'
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.05
     renderer.shadowMap.enabled = false
+
+    // Limpiar cualquier canvas previo antes de montar
+    while (container.firstChild) {
+      container.removeChild(container.firstChild)
+    }
     container.appendChild(renderer.domElement)
 
     // =========================================================================
@@ -348,7 +336,6 @@ export default function VinylCatalog3D() {
       SCENE_CONFIG.coverDepth
     )
 
-    // Materiales compartidos opacos para evitar recompilación de shaders
     const sharedSpineMaterial = new THREE.MeshStandardMaterial({
       color: 0xe2dcd0,
       roughness: 0.75,
@@ -404,12 +391,12 @@ export default function VinylCatalog3D() {
       )
 
       const introState: IntroOffset = {
-        offsetX: 9.2 + index * 1.15,
-        offsetY: 5.4 + index * 0.55,
-        offsetZ: -4.2 - index * 0.65,
-        rotX: 0.32,
-        rotY: -0.38,
-        rotZ: -0.24,
+        offsetX: 8.8 + index * 1.1,
+        offsetY: 5.0 + index * 0.5,
+        offsetZ: -3.8 - index * 0.6,
+        rotX: 0.3,
+        rotY: -0.35,
+        rotZ: -0.22,
       }
 
       const initialFocusY = index === 0 ? SCENE_CONFIG.selectedLiftY : 0
@@ -434,10 +421,11 @@ export default function VinylCatalog3D() {
         dampedRot.y + introState.rotY,
         dampedRot.z + introState.rotZ
       )
-      itemGroup.scale.setScalar(0.001)
+      // Escala inicial visible (0.86) para evitar que queden invisibles si el navegador pausa un frame
+      itemGroup.scale.setScalar(0.86)
 
       const frontMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
+        color: 0xf0ebe1,
         roughness: 0.32,
         metalness: 0.04,
       })
@@ -474,11 +462,11 @@ export default function VinylCatalog3D() {
       })
     })
 
-    // Pre-compilar shaders de la escena antes de iniciar el bucle de animación
+    // Pre-compilar shaders de la escena
     renderer.compile(scene, camera)
 
     // =========================================================================
-    // 5. CARGA ASÍNCRONA DE TEXTURAS EN GPU + ANIMACIÓN DE ENTRADA FLUIDA
+    // 5. CARGA ASÍNCRONA DE TEXTURAS COMPATIBLE CON SAFARI iOS + ENTRADA GSAP
     // =========================================================================
     let hasTriggeredIntro = false
 
@@ -487,7 +475,7 @@ export default function VinylCatalog3D() {
       hasTriggeredIntro = true
 
       coverRecords.forEach((record, idx) => {
-        const staggerDelay = 0.02 + idx * 0.042
+        const staggerDelay = 0.02 + idx * 0.04
 
         gsap.to(record.introState, {
           offsetX: 0,
@@ -496,27 +484,24 @@ export default function VinylCatalog3D() {
           rotX: 0,
           rotY: 0,
           rotZ: 0,
-          duration: 1.25,
+          duration: 1.2,
           delay: staggerDelay,
           ease: 'expo.out',
+          overwrite: 'auto',
         })
 
-        gsap.fromTo(
-          record.group.scale,
-          { x: 0.82, y: 0.82, z: 0.82 },
-          {
-            x: 1,
-            y: 1,
-            z: 1,
-            duration: 1.15,
-            delay: staggerDelay,
-            ease: 'expo.out',
-          }
-        )
+        gsap.to(record.group.scale, {
+          x: 1,
+          y: 1,
+          z: 1,
+          duration: 1.15,
+          delay: staggerDelay,
+          ease: 'expo.out',
+          overwrite: 'auto',
+        })
       })
     }
 
-    // Priorizar los primeros 5 vinilos visibles en pantalla y cargar el resto en paralelo
     const priorityRecords = coverRecords.slice(0, 5)
     const remainingRecords = coverRecords.slice(5)
 
@@ -527,24 +512,24 @@ export default function VinylCatalog3D() {
         maxAnisotropy
       )
       if (isDisposed) return
+      record.frontMaterial.color.setHex(0xffffff)
       record.frontMaterial.map = texture
       record.frontMaterial.needsUpdate = true
     }
 
-    // Fallback de seguridad por si la red tarda más de 90ms
-    const introFallbackTimer = window.setTimeout(startIntroAnimation, 90)
+    // Fallback inmediato (75ms) para que en Safari móvil los discos entren siempre sin esperar de más
+    const introFallbackTimer = window.setTimeout(startIntroAnimation, 75)
 
     Promise.all(priorityRecords.map(loadRecordTexture)).then(() => {
       window.clearTimeout(introFallbackTimer)
       startIntroAnimation()
-      // Cargar el resto de portadas en segundo plano sin bloquear el hilo principal
       remainingRecords.forEach((record) => {
         void loadRecordTexture(record)
       })
     })
 
     // =========================================================================
-    // 6. ESTADO COMPARTIDO: SCROLL + DRAG + FILTRO POR CATEGORÍAS
+    // 6. ESTADO DE NAVEGACIÓN DEL CARRUSEL 3D (SIN PIN-SPACER QUE ROMPA SAFARI)
     // =========================================================================
     const trackState = {
       visibleCount: VINYL_CATALOG.length,
@@ -564,32 +549,6 @@ export default function VinylCatalog3D() {
       trackState.targetProgress = THREE.MathUtils.clamp(value, 0, 1)
     }
 
-    const scrollTriggerInstance = ScrollTrigger.create({
-      trigger: section,
-      start: 'top top',
-      end: () => `+=${window.innerHeight * 4.2}`,
-      pin: true,
-      scrub: 0.6,
-      onUpdate: (self) => {
-        if (!trackState.isDragging) {
-          setClampedProgress(self.progress)
-        }
-      },
-    })
-    scrollTriggerRef.current = scrollTriggerInstance
-
-    const syncScrollToProgress = (progress: number, immediate = true) => {
-      const start = scrollTriggerInstance.start
-      const end = scrollTriggerInstance.end
-      if (end <= start) return
-      const targetScrollY = start + progress * (end - start)
-      if (immediate) {
-        lenis.scrollTo(targetScrollY, { immediate: true })
-      } else {
-        lenis.scrollTo(targetScrollY, { duration: 1.0 })
-      }
-    }
-
     const focusAndSelectVinyl = (targetSlotIndex: number) => {
       trackState.selectedIdx = targetSlotIndex
       setSelectedIndex(targetSlotIndex)
@@ -600,7 +559,6 @@ export default function VinylCatalog3D() {
           ? targetSlotIndex / (trackState.visibleCount - 1)
           : 0
       setClampedProgress(targetProgress)
-      syncScrollToProgress(targetProgress, false)
     }
 
     focusFirstVinylRef.current = () => {
@@ -637,11 +595,10 @@ export default function VinylCatalog3D() {
       setHoveredVinyl(null)
       setSelectedIndex(0)
       setActiveIndex(0)
-      syncScrollToProgress(0, false)
     }
 
     // =========================================================================
-    // 7. EVENTOS DE INTERACCIÓN (MOUSE + TOUCH RESPONSIVE)
+    // 7. EVENTOS DE INTERACCIÓN (MOUSE + TOUCH SAFARI iOS + TECLADO)
     // =========================================================================
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2(-999, -999)
@@ -655,6 +612,7 @@ export default function VinylCatalog3D() {
     }
 
     const onPointerDown = (e: PointerEvent) => {
+      if (currentViewRef.current !== 'catalog') return
       if (e.pointerType === 'mouse' && e.button !== 0) return
       trackState.isDragging = true
       trackState.hasMovedDuringDrag = false
@@ -665,6 +623,8 @@ export default function VinylCatalog3D() {
     }
 
     const onPointerMove = (e: PointerEvent) => {
+      if (currentViewRef.current !== 'catalog') return
+
       const rect = container.getBoundingClientRect()
       const isInsideCanvas =
         rect.width > 0 &&
@@ -682,29 +642,32 @@ export default function VinylCatalog3D() {
         const deltaX = e.clientX - trackState.dragStartX
         const deltaY = e.clientY - trackState.dragStartY
 
+        // Permite deslizar tanto horizontal como diagonalmente en pantallas móviles
         if (Math.hypot(deltaX, deltaY) > 5) {
           trackState.hasMovedDuringDrag = true
           container.style.cursor = 'grabbing'
 
-          const sensitivity =
-            window.innerWidth < 768
-              ? SCENE_CONFIG.dragSensitivity * 1.65
-              : SCENE_CONFIG.dragSensitivity
+          const isMobileViewport = window.innerWidth < 768
+          const sensitivity = isMobileViewport
+            ? SCENE_CONFIG.dragSensitivity * 1.85
+            : SCENE_CONFIG.dragSensitivity
+
+          const dominantDelta =
+            Math.abs(deltaX) >= Math.abs(deltaY) ? deltaX : -deltaY
 
           const nextProgress =
-            trackState.dragStartProgress - deltaX * sensitivity
+            trackState.dragStartProgress - dominantDelta * sensitivity
           setClampedProgress(nextProgress)
-          syncScrollToProgress(trackState.targetProgress, true)
 
           trackState.selectedIdx = null
         }
       }
     }
 
-    const onPointerUp = (e: PointerEvent) => {
+    const finishPointerInteraction = (e: PointerEvent, allowClick: boolean) => {
       if (!trackState.isDragging) return
 
-      const wasClick = !trackState.hasMovedDuringDrag
+      const wasClick = allowClick && !trackState.hasMovedDuringDrag
       trackState.isDragging = false
 
       if (wasClick) {
@@ -730,6 +693,14 @@ export default function VinylCatalog3D() {
       container.style.cursor = hoveredSlotIndex !== null ? 'pointer' : 'grab'
     }
 
+    const onPointerUp = (e: PointerEvent) => {
+      finishPointerInteraction(e, true)
+    }
+
+    const onPointerCancel = (e: PointerEvent) => {
+      finishPointerInteraction(e, false)
+    }
+
     const onPointerLeave = () => {
       trackState.isPointerInside = false
       pointer.set(-999, -999)
@@ -741,7 +712,7 @@ export default function VinylCatalog3D() {
     }
 
     const onWheel = (e: WheelEvent) => {
-      if (!trackState.isPointerInside) return
+      if (currentViewRef.current !== 'catalog') return
       const delta =
         Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
       const nextProgress =
@@ -755,11 +726,26 @@ export default function VinylCatalog3D() {
       setSelectedIndex(nearestIdx)
     }
 
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (currentViewRef.current !== 'catalog') return
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        const current = trackState.selectedIdx ?? 0
+        const next = Math.min(current + 1, trackState.visibleCount - 1)
+        focusAndSelectVinyl(next)
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        const current = trackState.selectedIdx ?? 0
+        const prev = Math.max(current - 1, 0)
+        focusAndSelectVinyl(prev)
+      }
+    }
+
     container.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
     window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerCancel)
     container.addEventListener('pointerleave', onPointerLeave)
-    container.addEventListener('wheel', onWheel, { passive: true })
+    section.addEventListener('wheel', onWheel, { passive: true })
+    window.addEventListener('keydown', onKeyDown)
 
     // =========================================================================
     // 8. BUCLE DE ANIMACIÓN CON INTERPOLACIÓN CONTINUA + MOVIMIENTO CONSTANTE
@@ -964,41 +950,53 @@ export default function VinylCatalog3D() {
     animate()
 
     // =========================================================================
-    // 9. RESPONSIVE RESIZE
+    // 9. RESIZE OBSERVER + VISUAL VIEWPORT (Soporte nativo para Safari iOS)
     // =========================================================================
-    const onResize = () => {
-      if (
-        !container ||
-        container.clientWidth === 0 ||
-        container.clientHeight === 0
-      ) {
-        return
-      }
-      const w = container.clientWidth
-      const h = container.clientHeight
+    const updateRendererDimensions = () => {
+      if (!container || isDisposed) return
+      const rect = container.getBoundingClientRect()
+      if (rect.width < 10 || rect.height < 10) return
+
+      const w = Math.round(rect.width)
+      const h = Math.round(rect.height)
       camera.aspect = w / h
       camera.position.z = getResponsiveCameraZ(w, h)
       camera.updateProjectionMatrix()
-      renderer.setSize(w, h)
+      renderer.setSize(w, h, false)
     }
 
-    window.addEventListener('resize', onResize)
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            updateRendererDimensions()
+          })
+        : null
+
+    resizeObserver?.observe(container)
+    window.addEventListener('resize', updateRendererDimensions)
+    window.visualViewport?.addEventListener('resize', updateRendererDimensions)
+
+    // Asegurar medición tras el primer layout de Safari iOS
+    const postLayoutRaf = requestAnimationFrame(updateRendererDimensions)
 
     return () => {
       isDisposed = true
       window.clearTimeout(introFallbackTimer)
+      cancelAnimationFrame(postLayoutRaf)
       cancelAnimationFrame(animationFrameId)
-      window.removeEventListener('resize', onResize)
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', updateRendererDimensions)
+      window.visualViewport?.removeEventListener(
+        'resize',
+        updateRendererDimensions
+      )
       container.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerCancel)
       container.removeEventListener('pointerleave', onPointerLeave)
-      container.removeEventListener('wheel', onWheel)
-      scrollTriggerInstance.kill()
-      scrollTriggerRef.current = null
-      gsap.ticker.remove(updateLenis)
-      lenis.destroy()
-      lenisRef.current = null
+      section.removeEventListener('wheel', onWheel)
+      window.removeEventListener('keydown', onKeyDown)
       sleeveGeometry.dispose()
       sharedSpineMaterial.dispose()
       sharedBackCoverMaterial.dispose()
@@ -1009,6 +1007,13 @@ export default function VinylCatalog3D() {
       }
     }
   }, [])
+
+  // Asegurar redimensionado del canvas al regresar a la vista del catálogo desde /carrito o /checkout
+  useEffect(() => {
+    if (currentView === 'catalog') {
+      window.dispatchEvent(new Event('resize'))
+    }
+  }, [currentView])
 
   // Alternar categoría en el multiselect
   const toggleCategory = (cat: VinylCategory) => {
@@ -1108,15 +1113,15 @@ export default function VinylCatalog3D() {
   return (
     <section
       ref={sectionRef}
-      className="relative flex flex-col w-full h-dvh overflow-hidden bg-[#F5F2EB] text-[#1C1B18]"
+      className="relative flex flex-col w-full h-full h-dvh overflow-hidden bg-[#F5F2EB] text-[#1C1B18]"
     >
       {/* Contenedor principal gestionado por Swup (#swup + .transition-swup) */}
       <div
         id="swup"
-        className="transition-swup relative flex flex-col w-full h-full overflow-hidden"
+        className="transition-swup relative flex flex-col flex-1 w-full h-full min-h-0 overflow-hidden"
       >
         {/* Encabezado responsive con nombre "vinilhouse" en fuente Chillax clickeable hacia el inicio */}
-        <header className="relative z-30 shrink-0 flex items-center justify-between gap-2 sm:gap-4 px-4 pt-4 pb-1 sm:px-8 sm:pt-5 sm:pb-2 md:px-14 bg-[#F5F2EB]">
+        <header className="relative z-30 shrink-0 flex items-center justify-between gap-2 sm:gap-4 px-4 pt-3.5 pb-1 sm:px-8 sm:pt-5 sm:pb-2 md:px-14 bg-[#F5F2EB]">
           <a
             href="/"
             onClick={handleTitleClick}
@@ -1184,14 +1189,14 @@ export default function VinylCatalog3D() {
 
         {/* VISTA 1: CATÁLOGO 3D */}
         <div
-          className={`flex-1 flex flex-col min-h-0 ${
+          className={`flex-1 flex flex-col w-full min-h-0 overflow-hidden ${
             currentView === 'catalog' ? 'flex' : 'hidden'
           }`}
         >
-          {/* Área exclusiva de Drag & 3D */}
+          {/* Área exclusiva de Drag & 3D con altura mínima garantizada en Safari iOS */}
           <div
             ref={canvasContainerRef}
-            className="relative flex-1 w-full min-h-0 cursor-grab active:cursor-grabbing select-none touch-none"
+            className="relative flex-1 w-full min-h-[220px] sm:min-h-[300px] cursor-grab active:cursor-grabbing select-none touch-none overflow-hidden"
             aria-label="Catálogo 3D interactivo de portadas de vinilos"
           />
 

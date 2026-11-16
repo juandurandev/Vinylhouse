@@ -9,15 +9,18 @@ html,
 body,
 #root {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  height: 100dvh;
   margin: 0;
   padding: 0;
   background-color: #f5f2eb;
   color: #1c1b18;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     sans-serif;
-  overflow-x: hidden;
+  overflow: hidden;
+  overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 
 .font-chillax {
@@ -36,7 +39,7 @@ html.is-animating .transition-swup {
 }
 
 /* ==========================================================================
-   ESTILOS DE BOTÓN 3D TÁCTIL RESPONSIVE (Basado en Buttons.tsx)
+   ESTILOS DE BOTÓN 3D TÁCTIL RESPONSIVE (Compatible con Safari iOS / WebKit)
    ========================================================================== */
 .button {
   -webkit-appearance: none;
@@ -44,8 +47,11 @@ html.is-animating .transition-swup {
   position: relative;
   isolation: isolate;
   z-index: 0;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-width: 0;
+  margin: 0;
   padding: 0 8px 12px;
   min-width: 9.5em;
   box-sizing: border-box;
@@ -54,16 +60,18 @@ html.is-animating .transition-swup {
   cursor: pointer;
   text-decoration: none;
   vertical-align: middle;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .button--compact {
-  min-width: auto;
+  min-width: 0;
 }
 
 .button--full {
   width: 100%;
   min-width: 0;
-  display: block;
+  display: flex;
 }
 
 .button:disabled {
@@ -77,18 +85,20 @@ html.is-animating .transition-swup {
   justify-content: center;
   gap: 8px;
   position: relative;
-  z-index: 0;
+  isolation: isolate;
+  z-index: 3;
+  width: 100%;
   padding: 8px 16px;
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0);
   text-align: center;
   color: #fff;
   text-shadow: 0 -1px rgba(0, 0, 0, 0.25);
-  transition-property: transform;
-  transition-duration: 0.2s;
+  transition: transform 0.18s ease;
   -webkit-user-select: none;
   user-select: none;
   font-size: 0.8125rem;
   font-weight: 500;
+  line-height: 1.25;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -98,62 +108,39 @@ html.is-animating .transition-swup {
   font-size: 0.75rem;
 }
 
-/* Adaptación responsive para pantallas móviles */
-@media (max-width: 640px) {
-  .button {
-    min-width: 0;
-    padding: 0 5px 10px;
-  }
-
-  .button-top {
-    padding: 7px 11px;
-    font-size: 0.74rem;
-    gap: 5px;
-  }
-
-  .button--compact .button-top {
-    padding: 5px 9px;
-    font-size: 0.7rem;
-  }
-}
-
 .button:not(:disabled):active .button-top {
-  transform: translateY(6px);
+  transform: translate3d(0, 6px, 0);
 }
 
 .button-top::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: -1;
   border-radius: 4px;
-  width: 100%;
-  height: 100%;
-  box-sizing: content-box;
   background-image: radial-gradient(#cd3f64, #9d3656);
-  text-align: center;
-  color: #fff;
   box-shadow: inset 0 0 0px 1px rgba(255, 255, 255, 0.2),
     0 1px 2px 1px rgba(255, 255, 255, 0.2);
-  transition-property: border-radius, padding, width, transform;
-  transition-duration: 0.2s;
+  transition: border-radius 0.18s ease, left 0.18s ease, right 0.18s ease;
 }
 
 .button:not(:disabled):active .button-top::after {
   border-radius: 6px;
-  padding: 0 2px;
+  left: -2px;
+  right: -2px;
 }
 
 .button-bottom {
   position: absolute;
-  z-index: -1;
+  z-index: 2;
+  top: 4px;
+  right: 4px;
   bottom: 4px;
   left: 4px;
   border-radius: 8px / 16px 16px 8px 8px;
-  padding-top: 6px;
-  width: calc(100% - 8px);
-  height: calc(100% - 10px);
-  box-sizing: content-box;
   background-color: #803;
   background-image: radial-gradient(
       4px 8px at 4px calc(100% - 8px),
@@ -169,24 +156,52 @@ html.is-animating .transition-swup {
     radial-gradient(16px at calc(100% + 4px) 0, white, transparent);
   box-shadow: 0px 2px 3px 0px rgba(0, 0, 0, 0.5),
     inset 0 -1px 3px 3px rgba(0, 0, 0, 0.4);
-  transition-property: border-radius, padding-top;
-  transition-duration: 0.2s;
+  transition: border-radius 0.18s ease, top 0.18s ease;
+  pointer-events: none;
 }
 
 .button:not(:disabled):active .button-bottom {
   border-radius: 10px 10px 8px 8px / 8px;
-  padding-top: 0;
+  top: 10px;
 }
 
 .button-base {
   position: absolute;
-  z-index: -2;
+  z-index: 1;
   top: 4px;
+  right: 0;
+  bottom: 0;
   left: 0;
   border-radius: 12px;
-  width: 100%;
-  height: calc(100% - 4px);
   background-color: rgba(0, 0, 0, 0.15);
   box-shadow: 0 1px 1px 0 rgba(255, 255, 255, 0.75),
     inset 0 2px 2px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+/* Adaptación responsive para pantallas móviles (Safari iOS & Android) */
+@media (max-width: 640px) {
+  .button {
+    min-width: 0;
+    padding: 0 5px 10px;
+  }
+
+  .button-top {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    gap: 5px;
+  }
+
+  .button--compact .button-top {
+    padding: 6px 10px;
+    font-size: 0.7rem;
+  }
+
+  .button:not(:disabled):active .button-top {
+    transform: translate3d(0, 5px, 0);
+  }
+
+  .button:not(:disabled):active .button-bottom {
+    top: 9px;
+  }
 }
